@@ -1,31 +1,49 @@
 import os
-import json
+from dotenv import load_dotenv
 import gradio as gr
 from google.cloud import aiplatform
 from google.oauth2 import credentials
+from google.auth.transport import requests
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
 
-# Get environment variables
+# Load environment variables
+load_dotenv()
+
+# Get credentials from environment variables
+email = os.getenv('GOOGLE_EMAIL')
+password = os.getenv('GOOGLE_PASSWORD')
 project_id = os.getenv('PROJECT_ID')
 endpoint_id = os.getenv('ENDPOINT_ID')
-#location = os.getenv('REGION')
-credentials_json = os.getenv('GOOGLE_CREDENTIALS')
+location = os.getenv('REGION')
 
-if not all([project_id, endpoint_id, 'us-central1', credentials_json]):
-    raise Exception("Missing required environment variables")
+def get_auth_token():
+    try:
+        creds = Credentials(
+            token=None,
+            client_id=email,
+            client_secret=password,
+            token_uri="https://oauth2.googleapis.com/token",
+            scopes=["https://www.googleapis.com/auth/cloud-platform"]
+        )
+        
+        creds.refresh(Request())
+        return creds
+    except Exception as e:
+        print(f"Authentication failed: {str(e)}")
+        raise Exception(f"Authentication failed: {str(e)}")
 
-# Set up credentials and initialize Vertex AI
+# Initialize Vertex AI with credentials
 try:
-    creds_dict = json.loads(credentials_json)
-    credentials = credentials.Credentials.from_authorized_user_info(creds_dict)
-    
+    credentials = get_auth_token()
     aiplatform.init(
         project=project_id,
-        location='us-central1',
+        location=location,
         credentials=credentials
     )
-    
     endpoint = aiplatform.Endpoint(endpoint_id)
 except Exception as e:
+    print(f"Failed to initialize Vertex AI: {str(e)}")
     raise Exception(f"Failed to initialize Vertex AI: {str(e)}")
 
 def predict(text):
@@ -53,6 +71,5 @@ interface = gr.Interface(
     theme="default"
 )
 
-# Launch the app
-port = int(os.getenv('PORT', 8080))
-interface.launch(server_name="0.0.0.0", server_port=port)
+if __name__ == "__main__":
+    interface.launch(server_name="0.0.0.0", server_port=int(os.getenv('PORT', 8084)))
